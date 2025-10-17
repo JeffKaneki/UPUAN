@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>UPUAN — J3fx</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    :root{
+      --glass-bg: rgba(24,24,24,0.35);
+      --glass-bd: rgba(255,255,255,0.12);
+      --text: #fff;
+      --muted: #bdbdbd;
+      --accent: #18e0ff; /* cyan line */
+      --active: #1DB954; /* lyric highlight */
+    }
+    *{box-sizing:border-box}
+    html,body{
+      height:100%;
+      margin:0;
+      font-family: Arial, Helvetica, sans-serif;
+      color:var(--text);
+      overflow:hidden;
+    }
+
+    /* Fullscreen background video */
+    #bg-video{
+      position:fixed; inset:0;
+      width:100%; height:100%;
+      object-fit:cover;
+      filter: blur(8px);
+      opacity:.75;
+      z-index:-2;
+    }
+    .overlay{
+      position:fixed; inset:0;
+      background:rgba(0,0,0,.5);
+      z-index:-1;
+    }
+
+    /* Main stage layout */
+    .stage{
+      position:fixed; inset:0;
+      display:flex; align-items:center; justify-content:center;
+      padding:24px;
+    }
+
+    /* Group that holds the vinyl (behind) + card (front) */
+    .stack{
+      position:relative;
+      width:min(980px, 92vw);
+      max-width:980px;
+    }
+
+    /* VINYL (PNG) — behind the card, larger, half-outside on the right */
+    .vinyl{
+      position:absolute;
+      top:50%;
+      right:-20%;
+      transform:translateY(-50%);
+      width:min(550px, 75vw);
+      z-index:0;              
+      pointer-events:none;
+      animation:spin 14s linear infinite;
+      animation-play-state: paused;
+      filter: drop-shadow(0 24px 48px rgba(0,0,0,.55));
+    }
+    .vinyl.playing{ animation-play-state: running; }
+    @keyframes spin{
+      from{ transform:translateY(-50%) rotate(0deg); }
+      to  { transform:translateY(-50%) rotate(360deg); }
+    }
+
+    /* GLASS CARD */
+    .card{
+      position:relative;
+      z-index:1;
+      background:var(--glass-bg);
+      border:1px solid var(--glass-bd);
+      backdrop-filter: blur(14px) saturate(140%);
+      -webkit-backdrop-filter: blur(14px) saturate(140%);
+      border-radius:22px;
+      box-shadow: 0 18px 60px rgba(0,0,0,.5);
+      padding:26px;
+    }
+
+    /* Top row: album art left, title/artist right */
+    .top{
+      display:grid;
+      grid-template-columns: 170px 1fr;
+      gap:18px;
+      align-items:center;
+    }
+    .album{
+      width:170px; height:170px; border-radius:16px; object-fit:cover;
+      box-shadow: 0 10px 26px rgba(0,0,0,.6);
+    }
+    .meta h1{
+      margin:0;
+      font-size:34px;
+      line-height:1.15;
+      letter-spacing:.3px;
+      font-weight:800;
+      text-transform:uppercase;
+      color:#fff;
+    }
+    .meta .artist{
+      margin:8px 0 0;
+      font-size:18px; color:#eaeaea;
+    }
+
+    /* Custom progress + controls block */
+    .controls{
+      margin-top:18px;
+      background: rgba(255,255,255,.06);
+      border:1px solid rgba(255,255,255,.08);
+      border-radius:14px;
+      padding:14px 16px 16px;
+      backdrop-filter: blur(10px);
+    }
+
+    .timebar{
+      display:flex; align-items:center; gap:10px;
+      margin-bottom:12px;
+    }
+    .clock{
+      width:54px; text-align:center; font-variant-numeric: tabular-nums;
+      font-size:12px; color:var(--muted);
+    }
+    .range{
+      -webkit-appearance:none; appearance:none;
+      width:100%; height:8px; border-radius:999px;
+      background:rgba(255,255,255,.18);
+      outline:none; margin:0;
+    }
+    .range::-webkit-slider-runnable-track{
+      height:8px; border-radius:999px;
+      background:linear-gradient(90deg, var(--accent) var(--p,0%), transparent var(--p,0%));
+    }
+    .range::-webkit-slider-thumb{
+      -webkit-appearance:none; appearance:none;
+      width:18px; height:18px; border-radius:50%;
+      background:#fff; border:3px solid var(--accent);
+      margin-top:-5px;
+      box-shadow: 0 2px 6px rgba(0,0,0,.35);
+      cursor:pointer;
+    }
+    .range::-moz-range-track{
+      height:8px; border-radius:999px; background:rgba(255,255,255,.18);
+    }
+    .range::-moz-range-progress{
+      height:8px; border-radius:999px; background:var(--accent);
+    }
+    .range::-moz-range-thumb{
+      width:18px; height:18px; border-radius:50%;
+      background:#fff; border:3px solid var(--accent);
+      box-shadow: 0 2px 6px rgba(0,0,0,.35);
+      cursor:pointer;
+    }
+
+    .buttons{
+      display:flex; align-items:center; justify-content:center; gap:26px;
+    }
+
+    
+    .btn{
+      background:none;
+      border:none;
+      padding:0;
+      cursor:pointer;
+    }
+    .btn img{
+      width:48px;
+      height:48px;
+      object-fit:contain;
+      filter: drop-shadow(0 2px 6px rgba(0,0,0,.6));
+      transition: transform .15s ease;
+    }
+    .btn img:hover{
+      transform: scale(1.15);
+    }
+
+    /* Lyrics */
+    .lyrics{
+      margin-top:18px;
+      height:220px;
+      overflow-y:auto;
+      text-align:center;
+      font-size:20px;
+      line-height:1.65;
+      scroll-behavior:smooth;
+      padding-right:6px;
+    }
+    .lyrics p{
+      margin:6px 0; opacity:.4; transition:.25s;
+      text-shadow: 0 1px 2px rgba(0,0,0,.35);
+    }
+    .lyrics p.before-active{ opacity:.7; }
+    .lyrics p.active{
+      color:var(--active); font-weight:700; opacity:1; font-size:30px;
+    }
+    .lyrics p:empty::after{ content:""; display:block; height:20px; }
+
+    /* Responsive tweaks */
+    @media (max-width: 720px){
+      .top{ grid-template-columns:120px 1fr; }
+      .album{ width:120px; height:120px; }
+      .meta h1{ font-size:26px; }
+      .stack{ width:95vw; }
+      .vinyl{ right:-28%; width:86vw; }
+    }
+  </style>
+</head>
+<body>
+  <!-- Background video -->
+  <video id="bg-video" muted loop>
+    <source src="assets/background.mp4" type="video/mp4" />
+  </video>
+  <div class="overlay"></div>
+
+  <div class="stage">
+    <div class="stack">
+      <img src="assets/vinyl.png" alt="Vinyl" class="vinyl" id="vinyl" />
+
+      <div class="card">
+        <div class="top">
+          <img src="assets/cover.jpg" alt="Album Cover" class="album" />
+          <div class="meta">
+            <h1>UPUAN</h1>
+            <div class="artist">Gloc 9</div>
+          </div>
+        </div>
+
+        <div class="controls">
+          <div class="timebar">
+            <div class="clock" id="tcur">0:00</div>
+            <input type="range" min="0" max="100" value="0" step="0.01" class="range" id="seek" />
+            <div class="clock" id="tdur">0:00</div>
+          </div>
+          <div class="buttons">
+            <button class="btn" id="prev" title="Previous 10s"><img src="assets/prev.png" alt="Prev"></button>
+            <button class="btn" id="play" title="Play/Pause"><img id="play-icon" src="assets/play.png" alt="Play"></button>
+            <button class="btn" id="next" title="Next 10s"><img src="assets/next.png" alt="Next"></button>
+          </div>
+        </div>
+
+        <div class="lyrics" id="lyrics"></div>
+
+        <audio id="audio">
+          <source src="assets/song.mp3" type="audio/mpeg" />
+          Your browser does not support audio.
+        </audio>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    /* ======== DATA (kept exactly from your original) ======== */
+    const lyricsData = [
+      { time: 0.1, text: "" },
+      { time: 40.5, text: "Kayo po na naka upo" },
+      { time: 45.5, text: "Subukan nyo namang tumayo" },
+      { time: 50.5, text: "At baka matanaw at baka matanaw na nyo" },
+      { time: 55.5, text: "Ang tunay na kalagayan ko" },
+      { time: 60, text: "Ganito kasi yan eh" },
+      { time: 61.5, text: "Tao po nandyan po ba kayo sa loob ng" },
+      { time: 64.2, text: "Malaking bahay at malawak na bakuran" },
+      { time: 66.5, text: "Mataas na pader pinapaligiran" },
+      { time: 69.5, text: "At naka pilang mga mamahaling sasakyan" },
+      { time: 72, text: "Mga bantay na laging bulong ng bulong" },
+      { time: 74, text: "Wala namang kasal pero marami ang naka barong" },
+      { time: 76.5, text: "Lumakas man ang ulan ay walang butas ang bubong" },
+      { time: 79, text: "Mga plato't kutsara na hindi kilala ang tutong" },
+      { time: 81.4, text: "At ang kanin ay simputi ng gatas na nasa kahon" },
+      { time: 84, text: "At kahit na hindi pasko sa lamesa ay may hamon" },
+      { time: 86.4, text: "Ang sarap sigurong manirahan sa bahay na ganyan" },
+      { time: 89, text: "Sabi pa nila ay dito mo rin matatagpuan" },
+      { time: 91.5, text: "Ang tao na nagmamay-ari ng isang upuan" },
+      { time: 94.5, text: "Na pag may pagkakatao'y pinag-aagawan" },
+      { time: 96.5, text: "Kaya naman hindi niya pinakakawalan" },
+      { time: 99, text: "Kung makikita ko lamang siya ay aking sisigawan" },
+      { time: 101, text: "" },
+      { time: 101.1, text: "Kayo po na naka upo" },
+      { time: 106.1, text: "Subukan nyo namang tumayo" },
+      { time: 111.1, text: "At baka matanaw at baka matanaw na nyo" },
+      { time: 116.1, text: "Ang tunay na kalagayan ko" },
+      { time: 121, text: "" },
+      { time: 122.2, text: "Mawalang galang na po Sa taong naka upo" },
+      { time: 124.5, text: "Alam niyo bang pantakal ng bigas namin ay di puno" },
+      { time: 127, text: "Ang ding-ding ng bahay namin ay pinagtagpi-tagping yero" },
+      { time: 129.7, text: "Sa gabi ay sobrang init na tumutunaw ng yelo" },
+      { time: 132.1, text: "Na di kayang bilhin upang ilagay sa inumin" },
+      { time: 134.2, text: "Pinakulong tubig sa lumang takuring uling-uling" },
+      { time: 137.2, text: "Gamit lang panggatong na inanod lamang sa istero" },
+      { time: 139.6, text: "Na nagsisilbing kusina sa umaga'y aming banyo" },
+      { time: 142.2, text: "Ang aking inay na may kayamanan isang kaldero" },
+      { time: 144.8, text: "Na nagagamit lang pag ang aking ama ay sumweldo" },
+      { time: 147.2, text: "Pero kulang na kulang parin" },
+      { time: 148.8, text: "Ulam na tuyo't asin" },
+      { time: 150, text: "Ang singkwenta pesos sa maghapo'y pagkakasyahin" },
+      { time: 152.7, text: "Di ko alam kung talagang maraming harang" },
+      { time: 154.7, text: "O mataas lang ang bakod" },
+      { time: 156, text: "O nagbubulag-bulagan lamang po kayo" },
+      { time: 158.3, text: "Kahit sa dami ng pera niyo" },
+      { time: 159.8, text: "Walang doktor na makapagpapalinaw ng mata niyo kaya" },
+      { time: 162.6, text: "" },
+      { time: 163, text: "Wag kang masyadong halata" },
+      { time: 166, text: "Bato-bato sa langit" },
+      { time: 170.2, text: "Ang matamaa'y wag magalit" },
+      { time: 174.9, text: "O bato-bato bato sa langit" },
+      { time: 180.7, text: "Ang matamaan ay" },
+      { time: 183.3, text: "Wag masyadong halata (hehey)" },
+      { time: 188.3, text: "Wag kang masyadong halata (hehey)" },
+      { time: 193.5, text: "Wag kang masyadong halata (hehey)" },
+      { time: 198.5, text: "Wag kang masyadong halata (hehey hehey)" },
+      { time: 203.6, text: "Hehey hehey" },
+      { time: 207.6, text: "" },
+      { time: 208.6, text: "MADE BY J3FX" }
+    ];
+
+    const audio   = document.getElementById('audio');
+    const bgVideo = document.getElementById('bg-video');
+    const lyricsDiv = document.getElementById('lyrics');
+    const seek = document.getElementById('seek');
+    const tcur = document.getElementById('tcur');
+    const tdur = document.getElementById('tdur');
+    const btnPlay = document.getElementById('play');
+    const playIcon = document.getElementById('play-icon');
+    const btnPrev = document.getElementById('prev');
+    const btnNext = document.getElementById('next');
+    const vinyl   = document.getElementById('vinyl');
+
+    const fmt = s=>{
+      if (!isFinite(s)) return '0:00';
+      const m = Math.floor(s/60);
+      const r = Math.floor(s%60).toString().padStart(2,'0');
+      return `${m}:${r}`;
+    };
+    const setRangeFill = ()=>{
+      const p = (seek.value - seek.min) / (seek.max - seek.min) * 100;
+      seek.style.setProperty('--p', `${p}%`);
+    };
+
+    lyricsData.forEach((line, i)=>{
+      const p = document.createElement('p');
+      p.textContent = line.text;
+      p.id = 'line-'+i;
+      lyricsDiv.appendChild(p);
+    });
+
+    function updateLyrics(){
+      const currentTime = audio.currentTime;
+      for (let i=0; i<lyricsData.length; i++){
+        const cur = lyricsData[i];
+        const next = lyricsData[i+1];
+        if (currentTime >= cur.time && (!next || currentTime < next.time)){
+          document.querySelectorAll('.lyrics p').forEach(p=>p.classList.remove('active','before-active'));
+          const active = document.getElementById('line-'+i);
+          if (active){
+            active.classList.add('active');
+            for (let j=Math.max(0,i-3); j<i; j++){
+              const prev = document.getElementById('line-'+j);
+              prev && prev.classList.add('before-active');
+            }
+            active.scrollIntoView({behavior:'smooth', block:'nearest'});
+          }
+          break;
+        }
+      }
+    }
+
+    audio.addEventListener('loadedmetadata', ()=>{
+      tdur.textContent = fmt(audio.duration);
+      seek.max = audio.duration;
+      setRangeFill();
+    });
+
+    audio.addEventListener('timeupdate', ()=>{
+      tcur.textContent = fmt(audio.currentTime);
+      if (!seek.matches(':active')){
+        seek.value = audio.currentTime;
+        setRangeFill();
+      }
+      updateLyrics();
+      if (Math.abs(bgVideo.currentTime - audio.currentTime) > 0.35){
+        bgVideo.currentTime = audio.currentTime;
+      }
+    });
+
+    seek.addEventListener('input', ()=>{
+      audio.currentTime = Number(seek.value);
+      setRangeFill();
+      updateLyrics();
+    });
+
+    btnPlay.addEventListener('click', ()=>{
+      if (audio.paused) audio.play(); else audio.pause();
+    });
+    btnPrev.addEventListener('click', ()=>{
+      audio.currentTime = Math.max(0, audio.currentTime - 10);
+    });
+    btnNext.addEventListener('click', ()=>{
+      audio.currentTime = Math.min(audio.duration || 0, audio.currentTime + 10);
+    });
+
+    audio.addEventListener('play', ()=>{
+      playIcon.src = 'assets/pause.png';
+      bgVideo.play().catch(()=>{});
+      vinyl.classList.add('playing');
+    });
+    audio.addEventListener('pause', ()=>{
+      playIcon.src = 'play.png';
+      bgVideo.pause();
+      vinyl.classList.remove('playing');
+    });
+    audio.addEventListener('ended', ()=>{
+      playIcon.src = 'play.png';
+      vinyl.classList.remove('playing');
+    });
+
+    audio.addEventListener('seeking', ()=>{
+      bgVideo.currentTime = audio.currentTime;
+    });
+  </script>
+</body>
+</html>
