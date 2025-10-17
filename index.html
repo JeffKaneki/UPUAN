@@ -408,12 +408,12 @@
       vinyl.classList.add('playing');
     });
     audio.addEventListener('pause', ()=>{
-      playIcon.src = 'play.png';
+      playIcon.src = 'assets/play.png';
       bgVideo.pause();
       vinyl.classList.remove('playing');
     });
     audio.addEventListener('ended', ()=>{
-      playIcon.src = 'play.png';
+      playIcon.src = 'assets/play.png';
       vinyl.classList.remove('playing');
     });
 
@@ -422,4 +422,5 @@
     });
   </script>
 </body>
+
 </html>
